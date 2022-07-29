@@ -14,7 +14,8 @@ import platform
 from .version import __version__
 import openvr.error_code
 from openvr.error_code import OpenVRError
-
+import sys
+import os
 
 class Pack4Structure(Structure):
     _pack_ = 4
@@ -50,14 +51,27 @@ else:
     else:
         raise ValueError("Libraries not available for this platform: " + platform.system())
 
-# Load library
-if platform.system() == 'Windows':
-    # Add current directory to PATH, so we can load the DLL from right here.
-    os.environ['PATH'] += os.pathsep + os.path.dirname(__file__)
-else:
-    _openvr_lib_name = os.path.join(os.path.dirname(__file__), _openvr_lib_name)
 
-_openvr = cdll.LoadLibrary(_openvr_lib_name)
+
+
+if getattr( sys, 'frozen', False ) :
+    # Load library
+    if platform.system() == 'Windows':
+       # Add current directory to PATH, so we can load the DLL from right here.
+        os.environ['PATH'] += os.pathsep + os.path.dirname(__file__)
+    else:
+        _openvr_lib_name = os.path.join(os.path.dirname(__file__), _openvr_lib_name)
+    _openvr = cdll.LoadLibrary(_openvr_lib_name)
+else :
+    # running live
+    # Load library
+    _lib_manager = ExitStack()
+    atexit.register(_lib_manager.close)
+    _lib_ref = importlib.resources.files(openvr) / _openvr_lib_name
+    _openvr_lib_path = _lib_manager.enter_context(importlib.resources.as_file(_lib_ref))
+    _openvr = ctypes.cdll.LoadLibrary(str(_openvr_lib_path))
+
+
 
 # Function pointer table calling convention
 if platform.system() == 'Windows':
